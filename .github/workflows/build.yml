@@ -1,0 +1,36 @@
+name: Build IPA
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Descompactar projeto
+        run: unzip -q Siri-iOS.zip
+      - name: Instalar XcodeGen
+        run: brew install xcodegen
+      - name: Gerar projeto Xcode
+        working-directory: Siri-iOS
+        run: xcodegen generate
+      - name: Compilar sem assinatura
+        working-directory: Siri-iOS
+        run: |
+          xcodebuild -project Siri.xcodeproj -scheme Siri -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY=""
+      - name: Empacotar ipa
+        working-directory: Siri-iOS
+        run: |
+          mkdir -p Payload
+          cp -R build/Build/Products/Release-iphoneos/Siri.app Payload/
+          zip -qr Siri.ipa Payload
+      - name: Publicar em Releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "build-${{ github.run_number }}" Siri-iOS/Siri.ipa \
+            --title "Siri build ${{ github.run_number }}" \
+            --notes "IPA sem assinatura, para instalar pelo SideStore."
